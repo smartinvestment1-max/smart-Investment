@@ -1,0 +1,7 @@
+node_modules/
+.env
+*.log
+backend/uploads/payment-proofs/*
+!backend/uploads/payment-proofs/.gitkeep
+dist/
+.DS_Store

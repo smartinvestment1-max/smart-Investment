@@ -1,0 +1,11 @@
+{
+  "name": "smartinvestment-platform",
+  "version": "1.0.0",
+  "private": true,
+  "description": "SmartInvestment client + admin + secure backend",
+  "scripts": {
+    "install:all": "npm install --prefix backend && npm install --prefix client && npm install --prefix admin",
+    "dev": "concurrently \"npm run dev --prefix backend\" \"npm run dev --prefix client\" \"npm run dev --prefix admin\""
+  },
+  "devDependencies": { "concurrently": "^9.2.1" }
+}
