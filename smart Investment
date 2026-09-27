@@ -1,0 +1,613 @@
+const API=import.meta.env.VITE_API_URL||'http://localhost:4000/api';
+const state={token:sessionStorage.getItem('si_admin_token'),admin:null,page:'dashboard'};const $=s=>document.querySelector(s);const money=n=>'PKR '+Number(n||0).toLocaleString('en-PK',{minimumFractionDigits:2,maximumFractionDigits:2});const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+async function api(path,opt={}){const headers={'Content-Type':'application/json',...(opt.headers||{})};if(state.token)headers.Authorization='Bearer '+state.token;const r=await fetch(API+path,{...opt,headers});const d=await r.json().catch(()=>({}));if(!r.ok)throw Error(d.error||'Request failed');return d}
+function login(){document.body.innerHTML=`<div class="login-page"><div class="login-card"><div class="brand"><span class="logo">S</span><div><b>SmartInvestment</b><small>ADMIN CONTROL CENTER</small></div></div><h1>Admin Login</h1><p>Secure access to platform operations and financial controls.</p><form id="loginForm"><label>Email / Username</label><input name="login" required><label>Password</label><input name="password" type="password" required><button class="primary wide">Sign in to dashboard</button><div id="msg"></div></form></div></div>`;$('#loginForm').onsubmit=async e=>{e.preventDefault();try{const d=await api('/admin/auth/login',{method:'POST',body:JSON.stringify(Object.fromEntries(new FormData(e.target)))});state.token=d.token;sessionStorage.setItem('si_admin_token',d.token);start()}catch(err){$('#msg').textContent=err.message}}}
+function shell(){document.body.innerHTML=`<div class="admin-shell"><aside class="sidebar"><div class="brand side-brand"><span class="logo">S</span><div><b>SmartInvestment</b><small>ADMIN PANEL</small></div></div><nav>${[['dashboard','▦','Dashboard'],['users','♙','Users Management'],['deposits','↓','Deposit Verification'],['withdrawals','↑','Withdrawal Management'],['plans','◈','Investment Plans'],['payments','▣','Payment Settings'],['transactions','▤','Transaction History'],['referrals','♧','Referral Management'],['settings','⚙','Settings & Security']].map(x=>`<button data-page="${x[0]}"><i>${x[1]}</i>${x[2]}</button>`).join('')}</nav><div class="secure">● SECURE · FAST · RELIABLE</div></aside><main><header class="topbar"><div><b id="pageTitle">Dashboard</b><small>SmartInvestment Administration</small></div><div class="top-right"><input id="globalSearch" placeholder="Search users..."> <span class="admin-chip">● <span id="adminName">Admin</span></span><button class="ghost" id="logout">Logout</button></div></header><div id="content"></div></main></div><div id="toast"></div>`;document.querySelectorAll('[data-page]').forEach(b=>b.onclick=()=>go(b.dataset.page));$('#logout').onclick=()=>{sessionStorage.removeItem('si_admin_token');location.reload()}}
+const titles={dashboard:'Dashboard',users:'Users Management',deposits:'Deposit Verification',withdrawals:'Withdrawal Management',plans:'Investment Plans',payments:'Payment Settings',transactions:'Transaction History',referrals:'Referral Management',settings:'Settings & Security'};
+function go(p){state.page=p;document.querySelectorAll('[data-page]').forEach(b=>b.classList.toggle('active',b.dataset.page===p));$('#pageTitle').textContent=titles[p];render()}
+function toast(m){let t=$('#toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2500)}
+function card(title,value,icon,sub='') {return `<div class="stat-card"><div class="stat-icon">${icon}</div><small>${title}</small><strong>${value}</strong><span>${sub}</span></div>`}
+async function render(){const c=$('#content');c.innerHTML='<div class="loading">Loading...</div>';try{if(state.page==='dashboard'){const d=await api('/admin/dashboard');c.innerHTML=`<section class="stats">${card('Total Registered Users',d.totalUsers,'♙','+8.4% this month')}${card('Total Deposits',money(d.totalDeposits),'↓','Verified deposits')}${card('Pending Withdrawals',d.pendingWithdrawals,'↑','Needs review')}${card('Active Investments',d.activeInvestments,'◉','Currently running')}${card('Total Transactions',d.totalTransactions,'▤','Ledger records')}</section><div class="dashboard-grid"><section class="panel chart-panel"><div class="panel-head"><div><h2>Overview</h2><small>Platform activity</small></div><select><option>This Month</option><option>Last Month</option></select></div><div class="chart"><div class="y-labels"><span>30K</span><span>20K</span><span>10K</span><span>0</span></div><div class="line-chart"><svg viewBox="0 0 700 230" preserveAspectRatio="none"><polyline points="0,190 60,160 120,175 180,120 240,145 300,90 360,125 420,65 480,110 540,50 600,95 700,35" fill="none" stroke="#13d7d0" stroke-width="4"/><polyline points="0,205 60,185 120,195 180,160 240,175 300,145 360,165 420,120 480,145 540,110 600,135 700,95" fill="none" stroke="#2a8cff" stroke-width="2" opacity=".55"/></svg></div></div></section><section class="panel"><div class="panel-head"><div><h2>Investments by Plan</h2><small>Distribution</small></div></div><div class="donut"><div><b>${d.investmentShare}%</b><small>Active</small></div></div><div class="legend"><span><i class="c1"></i>Plan 1 <b>${d.planBreakdown[0]||0}%</b></span><span><i class="c2"></i>Plan 2 <b>${d.planBreakdown[1]||0}%</b></span><span><i class="c3"></i>Standard <b>${d.planBreakdown[2]||0}%</b></span></div></section></div><div class="dashboard-grid bottom"><section class="panel"><div class="panel-head"><h2>Recent Deposits</h2><button class="link" onclick="window.__go('deposits')">View All</button></div>${d.recentDeposits.map(x=>`<div class="table-row"><span class="avatar sm">${esc(x.username[0].toUpperCase())}</span><span><b>${esc(x.username)}</b><small>${esc(x.method||'Payment')}</small></span><strong>${money(x.amount)}</strong><small>${new Date(x.created_at).toLocaleDateString()}</small><span class="status ${x.status}">${x.status}</span></div>`).join('')||'<div class="empty">No deposits.</div>'}</section><section class="panel"><div class="panel-head"><h2>Quick Summary</h2></div><div class="quick"><div><span class="qicon orange">↓</span><span>Pending Deposits</span><b>${d.pendingDeposits}</b></div><div><span class="qicon red">↑</span><span>Pending Withdrawals</span><b>${d.pendingWithdrawals}</b></div><div><span class="qicon blue">♙</span><span>Registered Users</span><b>${d.totalUsers}</b></div><div><span class="qicon green">▤</span><span>Total Transactions</span><b>${d.totalTransactions}</b></div></div></section></div>`}
+else if(state.page==='users'){const users=await api('/admin/users');c.innerHTML=`<div class="toolbar"><div><h1>Users Management</h1><small>Registered customer accounts</small></div><input id="filter" placeholder="Search name or email..."></div><section class="panel table-wrap"><table><thead><tr><th>User</th><th>Email</th><th>Phone</th><th>Balance</th><th>Registered</th><th>Status</th><th>Action</th></tr></thead><tbody>${users.map(u=>`<tr><td><b>${esc(u.username)}</b></td><td>${esc(u.email)}</td><td>${esc(u.phone||'—')}</td><td>${money(u.balance)}</td><td>${new Date(u.created_at).toLocaleDateString()}</td><td><span class="status ${u.status}">${u.status}</span></td><td><button class="mini" onclick="window.__toggleUser(${u.id},'${u.status==='active'?'suspended':'active'}')">${u.status==='active'?'Suspend':'Activate'}</button></td></tr>`).join('')}</tbody></table></section>`;$('#filter').oninput=e=>document.querySelectorAll('tbody tr').forEach(r=>r.style.display=r.textContent.toLowerCase().includes(e.target.value.toLowerCase())?'':'none')}
+else if(state.page==='deposits'){const rows=await api('/admin/deposits');c.innerHTML=`<div class="toolbar"><div><h1>Deposit Verification</h1><small>Review customer payment submissions</small></div></div><section class="panel table-wrap"><table><thead><tr><th>User</th><th>Amount</th><th>Method</th><th>Reference</th><th>Screenshot</th><th>Date</th><th>Status</th><th>Action</th></tr></thead><tbody>${rows.map(x=>`<tr><td>${esc(x.username)}</td><td>${money(x.amount)}</td><td>${esc(x.method||'—')}</td><td>${esc(x.reference||'—')}</td><td>${x.screenshot?`<a class="link" href="${API.replace('/api','')}${x.screenshot}" target="_blank">View</a>`:'—'}</td><td>${new Date(x.created_at).toLocaleString()}</td><td><span class="status ${x.status}">${x.status}</span></td><td>${x.status==='pending'?`<button class="mini success" onclick="window.__reviewDeposit(${x.id},'approve')">Approve</button><button class="mini danger" onclick="window.__reviewDeposit(${x.id},'reject')">Reject</button>`:'—'}</td></tr>`).join('')}</tbody></table></section>`}
+else if(state.page==='withdrawals'){const rows=await api('/admin/withdrawals');c.innerHTML=`<div class="toolbar"><div><h1>Withdrawal Management</h1><small>Review and complete withdrawal requests</small></div></div><section class="panel table-wrap"><table><thead><tr><th>User</th><th>Amount</th><th>Account</th><th>Available</th><th>Date</th><th>Status</th><th>Action</th></tr></thead><tbody>${rows.map(x=>`<tr><td>${esc(x.username)}</td><td>${money(x.amount)}</td><td>${esc(x.account_details)}</td><td>${money(x.available_balance)}</td><td>${new Date(x.created_at).toLocaleString()}</td><td><span class="status ${x.status}">${x.status}</span></td><td>${x.status==='pending'?`<button class="mini" onclick="window.__reviewWithdrawal(${x.id},'processing')">Processing</button><button class="mini success" onclick="window.__reviewWithdrawal(${x.id},'approve')">Complete</button><button class="mini danger" onclick="window.__reviewWithdrawal(${x.id},'reject')">Reject</button>`:x.status==='processing'?`<button class="mini success" onclick="window.__reviewWithdrawal(${x.id},'approve')">Complete</button><button class="mini danger" onclick="window.__reviewWithdrawal(${x.id},'reject')">Reject</button>`:'—'}</td></tr>`).join('')}</tbody></table></section>`}
+else if(state.page==='plans'){const rows=await api('/admin/plans');c.innerHTML=`<div class="toolbar"><div><h1>Investment Plans</h1><small>Manage the 10 published plans</small></div></div><section class="plan-admin-grid">${rows.map(x=>`<article class="plan-admin"><div class="plan-head"><span class="status ${x.active?'active':'inactive'}">${x.active?'ACTIVE':'DISABLED'}</span><button class="mini" onclick="window.__editPlan(${x.id})">Edit</button></div><h3>${esc(x.name)}</h3><b class="big-number">${money(x.amount)}</b><div class="muted-row"><span>Daily rate</span><b>${x.daily_rate}%</b></div><div class="muted-row"><span>Validity</span><b>${x.duration_days} days</b></div><button class="outline wide" onclick="window.__togglePlan(${x.id},${x.active?0:1})">${x.active?'Disable':'Enable'}</button></article>`).join('')}</section>`}
+else if(state.page==='payments'){const s=await api('/admin/payment-settings');c.innerHTML=`<div class="toolbar"><div><h1>Payment Settings</h1><small>Changes appear on the client deposit page immediately.</small></div></div><section class="panel form-grid"><form id="paymentForm"><div class="method-box"><b>EasyPaisa</b><label><input type="checkbox" name="e_enabled" ${s.easypaisa.enabled?'checked':''}> Enabled</label><input name="e_name" value="${esc(s.easypaisa.account_name)}" placeholder="Account holder"><input name="e_number" value="${esc(s.easypaisa.account_number)}" placeholder="Account number"><textarea name="e_instructions" placeholder="Instructions">${esc(s.easypaisa.instructions)}</textarea></div><div class="method-box"><b>JazzCash</b><label><input type="checkbox" name="j_enabled" ${s.jazzcash.enabled?'checked':''}> Enabled</label><input name="j_name" value="${esc(s.jazzcash.account_name)}" placeholder="Account holder"><input name="j_number" value="${esc(s.jazzcash.account_number)}" placeholder="Account number"><textarea name="j_instructions">${esc(s.jazzcash.instructions)}</textarea></div><div class="method-box"><b>Bank Transfer</b><label><input type="checkbox" name="b_enabled" ${s.bank.enabled?'checked':''}> Enabled</label><input name="b_name" value="${esc(s.bank.account_name)}" placeholder="Account holder"><input name="b_number" value="${esc(s.bank.account_number)}" placeholder="Account number"><textarea name="b_instructions">${esc(s.bank.instructions)}</textarea></div><button class="primary">Save Payment Settings</button></form></section>`;$('#paymentForm').onsubmit=async e=>{e.preventDefault();const f=new FormData(e.target);try{await api('/admin/payment-settings',{method:'PUT',body:JSON.stringify({easypaisa:{enabled:f.has('e_enabled'),account_name:f.get('e_name'),account_number:f.get('e_number'),instructions:f.get('e_instructions')},jazzcash:{enabled:f.has('j_enabled'),account_name:f.get('j_name'),account_number:f.get('j_number'),instructions:f.get('j_instructions')},bank:{enabled:f.has('b_enabled'),account_name:f.get('b_name'),account_number:f.get('b_number'),instructions:f.get('b_instructions')}})});toast('Payment settings saved')}catch(err){toast(err.message)}}}
+else if(state.page==='transactions'){const rows=await api('/admin/transactions');c.innerHTML=`<div class="toolbar"><div><h1>Transaction History</h1><small>Complete platform ledger</small></div><input id="filter" placeholder="Search transaction..."></div><section class="panel table-wrap"><table><thead><tr><th>User</th><th>Type</th><th>Amount</th><th>Reference</th><th>Date</th><th>Status</th></tr></thead><tbody>${rows.map(x=>`<tr><td>${esc(x.username)}</td><td>${esc(x.type)}</td><td>${money(x.amount)}</td><td>${esc(x.reference||'—')}</td><td>${new Date(x.created_at).toLocaleString()}</td><td><span class="status ${x.status}">${x.status}</span></td></tr>`).join('')}</tbody></table></section>`;$('#filter').oninput=e=>document.querySelectorAll('tbody tr').forEach(r=>r.style.display=r.textContent.toLowerCase().includes(e.target.value.toLowerCase())?'':'none')}
+else if(state.page==='referrals'){const r=await api('/admin/referrals');c.innerHTML=`<div class="toolbar"><div><h1>Referral Management</h1><small>Referral activity and rewards</small></div></div><section class="stats">${card('Total Referrals',r.total,'♧')}${card('Reward Paid',money(r.rewardPaid),'$')}${card('Pending Rewards',money(r.pendingRewards),'◈')}${card('Invalid Records',r.invalid,'!')}</section><section class="panel table-wrap"><table><thead><tr><th>Referrer</th><th>Referred User</th><th>Code</th><th>Reward</th><th>Status</th></tr></thead><tbody>${r.rows.map(x=>`<tr><td>${esc(x.referrer)}</td><td>${esc(x.referred)}</td><td>${esc(x.code)}</td><td>${money(x.reward)}</td><td><span class="status ${x.status}">${x.status}</span></td></tr>`).join('')}</tbody></table></section>`}
+else if(state.page==='settings'){const s=await api('/admin/settings');c.innerHTML=`<div class="toolbar"><div><h1>Settings & Security</h1><small>Platform controls and audit history</small></div></div><div class="dashboard-grid"><section class="panel"><h2>Platform Information</h2><form id="settingsForm"><label>Platform name</label><input name="platform_name" value="${esc(s.platform_name)}"><label>Support email</label><input name="support_email" value="${esc(s.support_email)}"><label>Referral reward rate (%)</label><input name="referral_rate" type="number" step="0.01" value="${s.referral_rate}"><button class="primary">Save settings</button></form></section><section class="panel"><h2>Recent Audit Logs</h2>${s.logs.map(x=>`<div class="audit"><b>${esc(x.action)}</b><span>${esc(x.admin)}</span><small>${new Date(x.created_at).toLocaleString()}</small></div>`).join('')||'<div class="empty">No audit logs.</div>'}</section></div>`;$('#settingsForm').onsubmit=async e=>{e.preventDefault();try{await api('/admin/settings',{method:'PUT',body:JSON.stringify(Object.fromEntries(new FormData(e.target)))});toast('Settings saved')}catch(err){toast(err.message)}}}}
+catch(e){c.innerHTML=`<section class="panel error">${esc(e.message)}</section>`}}
+window.__go=go;window.__reviewDeposit=async(id,a)=>{try{await api(`/admin/deposits/${id}/${a}`,{method:'POST',body:JSON.stringify({reason:a==='reject'?prompt('Rejection reason')||'Rejected by admin':undefined})});toast('Deposit updated');render()}catch(e){toast(e.message)}};window.__reviewWithdrawal=async(id,a)=>{try{await api(`/admin/withdrawals/${id}/${a}`,{method:'POST'});toast('Withdrawal updated');render()}catch(e){toast(e.message)}};window.__toggleUser=async(id,status)=>{try{await api(`/admin/users/${id}/status`,{method:'PATCH',body:JSON.stringify({status})});toast('User status updated');render()}catch(e){toast(e.message)}};window.__togglePlan=async(id,active)=>{try{await api(`/admin/plans/${id}`,{method:'PATCH',body:JSON.stringify({active:!!active})});toast('Plan status updated');render()}catch(e){toast(e.message)}};window.__editPlan=async id=>{const rows=await api('/admin/plans');const x=rows.find(r=>r.id===id);const name=prompt('Plan name',x.name);if(name===null)return;const amount=prompt('Investment amount',x.amount);if(amount===null)return;const rate=prompt('Daily rate %',x.daily_rate);if(rate===null)return;const days=prompt('Validity days',x.duration_days);if(days===null)return;try{await api(`/admin/plans/${id}`,{method:'PUT',body:JSON.stringify({name,amount:Number(amount),daily_rate:Number(rate),duration_days:Number(days)})});toast('Plan saved');render()}catch(e){toast(e.message)}};
+async function start(){try{state.admin=await api('/admin/me');shell();$('#adminName').textContent=state.admin.username;go('dashboard')}catch{sessionStorage.removeItem('si_admin_token');state.token=null;login()}}start();
+
+:root{--bg:#06131b;--side:#071820;--panel:#0a1c25;--panel2:#0d222c;--line:#173943;--text:#eafcff;--muted:#7899a4;--cyan:#13d7d0;--blue:#2a8cff;--green:#42df8c;--red:#ff5d6b;--orange:#ff9d43;--yellow:#f6c65b}*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 65% -10%,#104252 0,#06131b 38%);color:var(--text);font-family:Inter,Segoe UI,Arial,sans-serif;font-size:13px}button,input,select,textarea{font:inherit}button{cursor:pointer}.admin-shell{display:flex;min-height:100vh}.sidebar{width:238px;background:linear-gradient(180deg,#071b25,#06131b);border-right:1px solid var(--line);padding:17px 13px;position:fixed;inset:0 auto 0 0;display:flex;flex-direction:column}.brand{display:flex;align-items:center;gap:10px}.brand b{display:block}.brand small{display:block;color:var(--muted);font-size:9px;letter-spacing:1px;margin-top:3px}.logo{display:grid;place-items:center;width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,var(--cyan),#1d7fe1);font-weight:900;color:#03131a}.side-brand{padding:6px 8px 22px}.sidebar nav{display:grid;gap:4px}.sidebar nav button{display:flex;align-items:center;gap:11px;background:transparent;border:0;border-radius:8px;color:#7e9da6;padding:11px 10px;text-align:left}.sidebar nav button i{width:20px;text-align:center;font-style:normal;color:#8eaab2}.sidebar nav button:hover,.sidebar nav button.active{background:linear-gradient(90deg,#0d697a66,#0d697a18);color:#eaffff;box-shadow:inset 3px 0 var(--cyan)}.sidebar nav button.active i{color:var(--cyan)}.secure{margin-top:auto;border:1px solid #174554;background:#08242b;color:#8bd7d8;padding:9px;border-radius:8px;font-size:9px;text-align:center;letter-spacing:.5px}main{margin-left:238px;flex:1;min-width:0}.topbar{height:68px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;padding:0 26px;background:#07151d;position:sticky;top:0;z-index:5}.topbar small{display:block;color:var(--muted);font-size:10px;margin-top:3px}.top-right{display:flex;align-items:center;gap:10px}.top-right input,.toolbar input{width:220px;background:#091c25;border:1px solid #1b3e49;color:#eafcff;border-radius:8px;padding:9px 11px;outline:none}.admin-chip{background:#0b232d;border:1px solid var(--line);border-radius:99px;padding:8px 12px;color:#b7d4dc}.ghost{border:0;background:transparent;color:#8ba8b1}.stats{display:grid;grid-template-columns:repeat(5,1fr);gap:13px;padding:24px 26px 0}.stat-card{background:linear-gradient(145deg,#0d242e,#08171f);border:1px solid var(--line);border-radius:11px;padding:16px;min-height:108px;position:relative}.stat-card small{display:block;color:#7e9ca6;margin-bottom:12px}.stat-card strong{font-size:21px;display:block}.stat-card span:last-child{color:#49dc8c;font-size:10px;display:block;margin-top:7px}.stat-icon{position:absolute;right:14px;top:14px;width:29px;height:29px;border-radius:8px;display:grid;place-items:center;background:#0c6b7b;color:#a9ffff}.dashboard-grid{display:grid;grid-template-columns:1.65fr 1fr;gap:15px;padding:18px 26px 0}.dashboard-grid.bottom{grid-template-columns:1.65fr 1fr}.panel{background:linear-gradient(145deg,#0b202a,#08171f);border:1px solid var(--line);border-radius:12px;padding:17px;box-shadow:0 10px 30px #0003}.panel-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:13px}.panel h2{font-size:14px;margin:0}.panel-head small{color:var(--muted);font-size:10px}.panel select{background:#081a22;border:1px solid var(--line);color:#9bb6be;padding:6px;border-radius:6px}.chart{height:250px;display:flex;position:relative;border-radius:8px;background:linear-gradient(#16343b 1px,transparent 1px) 0 0/100% 25%}.y-labels{width:45px;display:flex;flex-direction:column;justify-content:space-between;padding:12px 0;color:#62808a;font-size:9px}.line-chart{flex:1}.line-chart svg{width:100%;height:100%}.donut{width:155px;height:155px;border-radius:50%;margin:12px auto;background:conic-gradient(var(--cyan) 0 65%,#2a8cff 65% 85%,#735cff 85% 100%);display:grid;place-items:center}.donut>div{width:104px;height:104px;border-radius:50%;background:#0a1b24;display:grid;place-items:center;align-content:center}.donut b{font-size:21px}.donut small{color:var(--muted)}.legend{display:grid;gap:8px}.legend span{display:flex;align-items:center;gap:8px;color:#93adb5}.legend b{margin-left:auto;color:#dff8fb}.legend i{width:8px;height:8px;border-radius:50%;background:var(--cyan)}.legend .c2{background:#2a8cff}.legend .c3{background:#735cff}.table-row{display:grid;grid-template-columns:30px 1.2fr .8fr .7fr auto;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid #14323b}.table-row:last-child{border-bottom:0}.table-row span:nth-child(2){display:grid;gap:3px}.table-row small{color:var(--muted)}.avatar.sm{width:28px;height:28px;font-size:10px;margin:0}.status{display:inline-flex;padding:4px 7px;border-radius:99px;font-size:9px;text-transform:capitalize;background:#10242c;border:1px solid #244650;color:#9eb7be}.status.approved,.status.completed,.status.active{color:#5be99d;background:#0f3021;border-color:#216f4b}.status.pending{color:#ffd76c;background:#352b12;border-color:#6e5b22}.status.rejected,.status.suspended{color:#ff8188;background:#35171b;border-color:#71353a}.status.inactive{color:#a2adb2}.quick{display:grid;gap:9px}.quick div{display:flex;align-items:center;gap:10px;background:#091b23;padding:10px;border-radius:8px}.quick div span:nth-child(2){flex:1;color:#a4bcc3}.qicon{width:25px;height:25px;display:grid;place-items:center;border-radius:6px}.qicon.orange{background:#50321a;color:#ffab56}.qicon.red{background:#4b1c22;color:#ff6c77}.qicon.blue{background:#133252;color:#55aaff}.qicon.green{background:#123c2a;color:#5ae99c}.toolbar{display:flex;justify-content:space-between;align-items:center;padding:23px 26px 0;gap:15px}.toolbar h1{font-size:22px;margin:0 0 4px}.toolbar small{color:var(--muted)}.toolbar+.panel,.toolbar~.panel{margin:18px 26px}.table-wrap{overflow:auto}table{width:100%;border-collapse:collapse}th,td{padding:12px 9px;border-bottom:1px solid #15343e;text-align:left;white-space:nowrap}th{font-size:9px;color:#7898a2;text-transform:uppercase}td{color:#d5e8ec}.mini{border:1px solid #28505b;background:#0b2028;color:#cdebf0;border-radius:6px;padding:6px 8px;font-size:10px;margin-right:5px}.mini.success{color:#62e99f;border-color:#286d4d}.mini.danger{color:#ff858d;border-color:#74363d}.link{background:none;border:0;color:var(--cyan)}.plan-admin-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;padding:18px 26px}.plan-admin{background:linear-gradient(145deg,#0c222c,#08171f);border:1px solid var(--line);border-radius:11px;padding:16px}.plan-head{display:flex;justify-content:space-between;align-items:center}.plan-admin h3{margin:17px 0 5px}.big-number{font-size:22px}.muted-row{display:flex;justify-content:space-between;color:var(--muted);padding:10px 0;border-bottom:1px solid #14323b}.muted-row b{color:#d9f2f5}.wide{width:100%}.outline{background:#091b23;border:1px solid #27515c;color:#d7f6fa;border-radius:7px;padding:9px 12px}.form-grid{margin:18px 26px}.form-grid form{display:grid;grid-template-columns:repeat(3,1fr);gap:13px}.method-box{display:grid;gap:8px;background:#091b23;border:1px solid var(--line);padding:14px;border-radius:9px}.method-box input,.method-box textarea,.form-grid input{width:100%;background:#07151c;border:1px solid #21434e;color:#eaffff;border-radius:7px;padding:10px}.method-box label{color:#9eb8c0}.method-box textarea{min-height:80px;resize:vertical}.form-grid form>button{grid-column:1/-1;max-width:220px}.primary{border:0;background:linear-gradient(135deg,var(--cyan),#0c9fbe);color:#031519;border-radius:7px;padding:10px 14px;font-weight:800}.login-page{min-height:100vh;display:grid;place-items:center;background:radial-gradient(circle at top right,#0d4d59,#061118 55%);padding:20px}.login-card{width:min(420px,100%);background:#091c25;border:1px solid #1b4855;border-radius:14px;padding:28px;box-shadow:0 30px 90px #0008}.login-card h1{margin:25px 0 5px}.login-card p{color:var(--muted);margin-top:0}.login-card label{display:block;color:#9bb6be;margin:14px 0 6px}.login-card input{width:100%;background:#06151c;border:1px solid #234753;color:#eaffff;padding:11px;border-radius:7px}.login-card .primary{margin-top:18px}.loading,.empty{padding:50px 20px;text-align:center;color:var(--muted)}#msg{color:#ff838a;margin-top:10px}.audit{display:grid;grid-template-columns:1fr auto;gap:4px;padding:11px 0;border-bottom:1px solid #14323b}.audit small{grid-column:1/-1;color:var(--muted)}.error{color:#ff8d95;margin:26px}.toast{position:fixed;right:20px;bottom:20px;background:#eaffff;color:#032129;padding:12px 15px;border-radius:8px;font-weight:700;opacity:0;transform:translateY(10px);transition:.2s;z-index:99}.toast.show{opacity:1;transform:none}@media(max-width:1100px){.stats{grid-template-columns:repeat(3,1fr)}.plan-admin-grid{grid-template-columns:repeat(3,1fr)}.form-grid form{grid-template-columns:1fr}.dashboard-grid,.dashboard-grid.bottom{grid-template-columns:1fr}}@media(max-width:760px){.sidebar{width:66px}.side-brand div,.sidebar nav button span,.sidebar nav button:not(.active) span,.secure{display:none}main{margin-left:66px}.topbar{padding:0 13px}.top-right input{display:none}.stats{grid-template-columns:1fr 1fr;padding:15px 13px 0}.dashboard-grid,.dashboard-grid.bottom{padding:13px}.toolbar{padding:15px 13px 0;align-items:flex-start;flex-direction:column}.toolbar~.panel,.toolbar+.panel{margin:13px}.plan-admin-grid{grid-template-columns:1fr 1fr;padding:13px}.table-row{grid-template-columns:28px 1fr auto}.table-row small:nth-child(4){display:none}}@media(max-width:500px){.stats{grid-template-columns:1fr}.plan-admin-grid{grid-template-columns:1fr}.topbar small{display:none}}
+
+<!doctype html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>SmartInvestment Admin</title><link rel="stylesheet" href="/src/styles.css"></head><body><div id="app"></div><script type="module" src="/src/main.js"></script></body></html>
+
+{
+  "name": "smartinvestment-admin",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": { "dev": "vite --host 0.0.0.0 --port 5174", "build": "vite build", "preview": "vite preview --host 0.0.0.0 --port 5174" },
+  "devDependencies": { "vite": "^7.1.7" }
+}
+
+VITE_API_URL=http://localhost:4000/api
+
+const API=import.meta.env.VITE_API_URL||'http://localhost:4000/api';
+const state={token:localStorage.getItem('si_token'),user:null,page:'dashboard',plans:[],settings:null};
+const $=s=>document.querySelector(s);const money=n=>'PKR '+Number(n||0).toLocaleString('en-PK',{minimumFractionDigits:2,maximumFractionDigits:2});
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+async function api(path,opt={}){const headers={...(opt.body instanceof FormData?{}:{'Content-Type':'application/json'}),...(opt.headers||{})};if(state.token)headers.Authorization='Bearer '+state.token;const r=await fetch(API+path,{...opt,headers});const d=await r.json().catch(()=>({}));if(!r.ok)throw Error(d.error||'Request failed');return d}
+function toast(msg){let t=$('#toast');if(!t){t=document.createElement('div');t.id='toast';document.body.appendChild(t)}t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2800)}
+function shell(){document.body.innerHTML=`<div class="site"><header class="top"><div class="brand"><span class="logo">S</span><div><b>SmartInvestment</b><small>Secure wealth platform</small></div></div><div class="top-actions"><span id="userName"></span><button class="ghost" id="logout">Logout</button></div></header><div class="mobile-nav"><button data-page="dashboard">Home</button><button data-page="plans">Plans</button><button data-page="deposit">Deposit</button><button data-page="withdraw">Withdraw</button></div><div class="body"><aside class="side"><button data-page="dashboard">⌂ <span>Dashboard</span></button><button data-page="plans">◈ <span>Investment Plans</span></button><button data-page="deposit">↓ <span>Deposit</span></button><button data-page="investments">◉ <span>My Investments</span></button><button data-page="withdraw">↑ <span>Withdraw</span></button><button data-page="transactions">▤ <span>Transactions</span></button><button data-page="referrals">♧ <span>Referrals</span></button><button data-page="profile">◎ <span>Profile</span></button></aside><main id="content"></main></div></div><div id="toast"></div>`;document.querySelectorAll('[data-page]').forEach(b=>b.onclick=()=>go(b.dataset.page));$('#logout').onclick=()=>{localStorage.removeItem('si_token');location.reload()}}
+function authView(){document.body.innerHTML=`<div class="auth-wrap"><div class="auth-card"><div class="brand big"><span class="logo">S</span><div><b>SmartInvestment</b><small>Secure investment platform</small></div></div><div class="tabs"><button id="loginTab" class="active">Login</button><button id="signupTab">Create account</button></div><form id="authForm"></form><div id="authMsg" class="form-msg"></div></div></div>`;let mode='login';const render=()=>{$('#authForm').innerHTML=mode==='login'?`<label>Username</label><input name="username" required minlength="3"><label>Password</label><input name="password" type="password" required><button class="primary wide">Login</button>`:`<label>Username</label><input name="username" required minlength="3"><label>Password</label><input name="password" type="password" required minlength="6"><label>Referral code <span class="muted">optional</span></label><input name="referralCode"><button class="primary wide">Create account</button>`};render();$('#loginTab').onclick=()=>{mode='login';$('#loginTab').classList.add('active');$('#signupTab').classList.remove('active');render()};$('#signupTab').onclick=()=>{mode='signup';$('#signupTab').classList.add('active');$('#loginTab').classList.remove('active');render()};$('#authForm').onsubmit=async e=>{e.preventDefault();const fd=new FormData(e.target);const body=Object.fromEntries(fd);try{const d=await api(mode==='login'?'/auth/login':'/auth/signup',{method:'POST',body:JSON.stringify(body)});state.token=d.token;localStorage.setItem('si_token',d.token);start()}catch(err){$('#authMsg').textContent=err.message}}}
+async function start(){try{state.user=await api('/profile');shell();await load();go('dashboard')}catch{localStorage.removeItem('si_token');state.token=null;authView()}}
+async function load(){[state.plans,state.settings]=await Promise.all([api('/plans'),api('/settings/public')]);$('#userName').textContent=state.user.username}
+function go(p){state.page=p;render();document.querySelectorAll('[data-page]').forEach(x=>x.classList.toggle('active',x.dataset.page===p))}
+function stat(title,value,icon){return `<div class="stat"><span class="stat-icon">${icon}</span><small>${title}</small><b>${value}</b></div>`}
+async function render(){if(!state.user)return;const c=$('#content');try{if(state.page==='dashboard'){const [inv,tx]=await Promise.all([api('/investments'),api('/transactions')]);c.innerHTML=`<div class="page-head"><div><h1>Welcome, ${esc(state.user.username)}</h1><p>Manage your investments and account from one place.</p></div><button class="primary" onclick="window.__go('plans')">Explore Plans</button></div><div class="stats">${stat('Available Balance',money(state.user.balance),'◈')}${stat('Active Investments',inv.filter(x=>x.status==='active').length,'◉')}${stat('Referral Earnings',money(state.user.referral_earnings),'♧')}${stat('Transactions',tx.length,'▤')}</div><div class="grid2"><section class="panel"><div class="panel-head"><h3>Portfolio Overview</h3><span class="badge green">Live</span></div><div class="chart"><div class="bars">${[42,58,35,70,55,84,65,92,78,96].map((h,i)=>`<i style="height:${h}%" title="${i+1}"></i>`).join('')}</div><div class="chart-line"></div></div></section><section class="panel"><div class="panel-head"><h3>Available Plans</h3><button class="link" onclick="window.__go('plans')">View all</button></div>${state.plans.slice(0,4).map(p=>`<div class="row-item"><span><b>${esc(p.name)}</b><small>${p.duration_days} days · ${p.daily_rate}% daily</small></span><strong>${money(p.amount)}</strong></div>`).join('')}</section></div><section class="panel"><div class="panel-head"><h3>Recent Transactions</h3><button class="link" onclick="window.__go('transactions')">View all</button></div>${tx.slice(0,6).map(t=>`<div class="row-item"><span><b>${esc(t.type)}</b><small>${new Date(t.created_at).toLocaleString()}</small></span><strong>${money(t.amount)}</strong><span class="badge ${t.status}">${t.status}</span></div>`).join('')||'<div class="empty">No transactions yet.</div>'}</section>`}
+else if(state.page==='plans'){c.innerHTML=`<div class="page-head"><div><h1>Investment Plans</h1><p>Choose from active plans configured by the platform.</p></div></div><div class="plan-grid">${state.plans.map(p=>`<article class="plan-card"><div class="plan-top"><span class="badge blue">ACTIVE</span><h3>${esc(p.name)}</h3></div><div class="plan-amount">${money(p.amount)}</div><div class="plan-meta"><span>Daily rate <b>${p.daily_rate}%</b></span><span>Validity <b>${p.duration_days} days</b></span></div><button class="primary wide" onclick="window.__invest(${p.id})">Invest now</button></article>`).join('')}</div>`}
+else if(state.page==='deposit'){c.innerHTML=`<div class="page-head"><div><h1>Deposit</h1><p>Submit your payment for admin verification.</p></div></div><div class="grid2"><section class="panel"><h3>Payment Methods</h3>${state.settings.methods.map(m=>m.enabled?`<div class="payment-method"><b>${esc(m.name)}</b><span>${esc(m.account_name)}</span><strong>${esc(m.account_number)}</strong><small>${esc(m.instructions||'Send payment and keep your transaction reference.')}</small></div>`:'').join('')}</section><section class="panel"><h3>Deposit Request</h3><form id="depositForm"><label>Investment plan</label><select name="planId">${state.plans.map(p=>`<option value="${p.id}">${esc(p.name)} — ${money(p.amount)}</option>`).join('')}</select><label>Transaction ID / Reference</label><input name="transactionId" required><label>Payment screenshot <span class="muted">optional</span></label><input name="paymentScreenshot" type="file" accept="image/*"><button class="primary wide">Submit for verification</button><div id="formMsg" class="form-msg"></div></form></section></div>`;$('#depositForm').onsubmit=async e=>{e.preventDefault();try{const d=await api('/deposits',{method:'POST',body:new FormData(e.target)});toast(d.message);go('transactions')}catch(err){$('#formMsg').textContent=err.message}}}
+else if(state.page==='investments'){const inv=await api('/investments');c.innerHTML=`<div class="page-head"><div><h1>My Investments</h1><p>Your existing investments retain their original terms.</p></div></div><section class="panel">${inv.map(x=>`<div class="investment"><div><b>${esc(x.plan_name)}</b><small>${new Date(x.start_at).toLocaleDateString()} → ${new Date(x.end_at).toLocaleDateString()}</small></div><strong>${money(x.amount)}</strong><span>${x.daily_rate}% / day</span><span class="badge ${x.status}">${x.status}</span></div>`).join('')||'<div class="empty">No investments yet. Deposit and invest to get started.</div>'}</section>`}
+else if(state.page==='withdraw'){c.innerHTML=`<div class="page-head"><div><h1>Withdraw</h1><p>Request withdrawal from your available balance.</p></div></div><section class="panel form-panel"><div class="available">Available balance <b>${money(state.user.balance)}</b></div><form id="withdrawForm"><label>Amount</label><input name="amount" type="number" min="1" step="0.01" required><label>Payment method</label><select name="method"><option>EasyPaisa</option><option>JazzCash</option><option>Bank Transfer</option></select><label>Account details</label><textarea name="account" rows="4" placeholder="Account name and number / bank details" required></textarea><button class="primary wide">Submit withdrawal</button><div id="formMsg" class="form-msg"></div></form></section>`;$('#withdrawForm').onsubmit=async e=>{e.preventDefault();try{const d=await api('/withdrawals',{method:'POST',body:JSON.stringify(Object.fromEntries(new FormData(e.target)))});toast(d.message);await refreshUser();go('transactions')}catch(err){$('#formMsg').textContent=err.message}}}
+else if(state.page==='transactions'){const tx=await api('/transactions');c.innerHTML=`<div class="page-head"><div><h1>Transactions</h1><p>Complete account ledger.</p></div></div><section class="panel table-wrap"><table><thead><tr><th>Type</th><th>Amount</th><th>Reference</th><th>Status</th><th>Date</th></tr></thead><tbody>${tx.map(t=>`<tr><td>${esc(t.type)}</td><td>${money(t.amount)}</td><td>${esc(t.reference||'—')}</td><td><span class="badge ${t.status}">${t.status}</span></td><td>${new Date(t.created_at).toLocaleString()}</td></tr>`).join('')||'<tr><td colspan="5">No transactions.</td></tr>'}</tbody></table></section>`}
+else if(state.page==='referrals'){const r=await api('/referrals');c.innerHTML=`<div class="page-head"><div><h1>Referrals</h1><p>Invite users with your referral code.</p></div></div><div class="stats">${stat('Referral Code',`<span class="code">${esc(r.code)}</span>`,'♧')}${stat('Total Referrals',r.total,'◎')}${stat('Referral Earnings',money(r.earnings),'$')}</div><section class="panel"><h3>Referred Users</h3>${r.users.map(u=>`<div class="row-item"><span><b>${esc(u.username)}</b><small>${new Date(u.created_at).toLocaleDateString()}</small></span><span class="badge ${u.reward_status}">${u.reward_status}</span></div>`).join('')||'<div class="empty">No referrals yet.</div>'}</section>`}
+else if(state.page==='profile'){c.innerHTML=`<div class="page-head"><div><h1>Profile</h1><p>Account and security information.</p></div></div><section class="panel profile"><div class="avatar">${esc(state.user.username[0].toUpperCase())}</div><h2>${esc(state.user.username)}</h2><p>Joined ${new Date(state.user.created_at).toLocaleDateString()}</p><div class="profile-grid"><div><small>Referral code</small><b>${esc(state.user.referral_code)}</b></div><div><small>Status</small><b>${esc(state.user.status)}</b></div></div><button class="outline" id="changePass">Change password</button></section>`;$('#changePass').onclick=async()=>{const current=prompt('Current password');if(current===null)return;const next=prompt('New password (minimum 6 characters)');if(!next)return;try{await api('/auth/change-password',{method:'POST',body:JSON.stringify({currentPassword:current,newPassword:next})});toast('Password changed')}catch(e){toast(e.message)}}}}
+catch(e){c.innerHTML=`<section class="panel error">${esc(e.message)}</section>`}}
+async function refreshUser(){state.user=await api('/profile');$('#userName').textContent=state.user.username}
+window.__go=go;window.__invest=async id=>{try{const d=await api('/investments',{method:'POST',body:JSON.stringify({planId:id})});toast(d.message);await refreshUser();go('investments')}catch(e){toast(e.message)}};
+start();
+
+:root{--bg:#07131b;--panel:#0b1c25;--panel2:#0e2530;--line:#163743;--text:#eefbff;--muted:#88a6b0;--cyan:#11d6d0;--blue:#2798ff;--green:#35d07f;--red:#ff5c68;--yellow:#f6c65b}*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at top right,#123642 0,#07131b 42%);color:var(--text);font-family:Inter,Segoe UI,Arial,sans-serif;font-size:14px}button,input,select,textarea{font:inherit}button{cursor:pointer}.site{min-height:100vh}.top{height:70px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;padding:0 28px;background:#07151d}.brand{display:flex;gap:11px;align-items:center}.brand b{display:block;font-size:16px}.brand small{color:var(--muted);font-size:11px}.logo{display:grid;place-items:center;width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,var(--cyan),#087fba);font-weight:900;color:#04131a}.top-actions{display:flex;align-items:center;gap:15px;color:#dff}.body{display:flex;min-height:calc(100vh - 70px)}.side{width:230px;border-right:1px solid var(--line);padding:18px 12px;background:#081720}.side button{display:flex;width:100%;border:0;background:transparent;color:#8eabb4;text-align:left;padding:12px 13px;border-radius:9px;margin:3px 0;gap:11px}.side button:hover,.side button.active{background:linear-gradient(90deg,#0d6e7a55,#12c8c018);color:#eaffff;box-shadow:inset 3px 0 var(--cyan)}main{flex:1;padding:30px;max-width:1400px;margin:auto;width:100%}.page-head{display:flex;justify-content:space-between;gap:20px;align-items:center;margin-bottom:24px}.page-head h1{margin:0 0 6px;font-size:25px}.page-head p{margin:0;color:var(--muted)}.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px}.stat{background:linear-gradient(145deg,#0d242e,#091923);border:1px solid var(--line);border-radius:12px;padding:17px;min-height:112px;position:relative}.stat-icon{float:right;width:34px;height:34px;display:grid;place-items:center;border-radius:9px;background:#0d6974;color:var(--cyan)}.stat small{display:block;color:var(--muted);margin-bottom:13px}.stat b{font-size:22px}.grid2{display:grid;grid-template-columns:1.5fr 1fr;gap:18px;margin-bottom:18px}.panel{background:linear-gradient(145deg,#0c202a,#081820);border:1px solid var(--line);border-radius:13px;padding:19px;margin-bottom:18px;box-shadow:0 10px 30px #0003}.panel-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}.panel h3{margin:0;font-size:15px}.row-item,.investment{display:grid;grid-template-columns:1fr auto auto;gap:18px;align-items:center;padding:13px 0;border-bottom:1px solid #14313a}.row-item:last-child,.investment:last-child{border-bottom:0}.row-item span:first-child{display:grid;gap:5px}.row-item small,.investment small{color:var(--muted);display:block;margin-top:3px}.row-item strong{white-space:nowrap}.chart{height:250px;position:relative;overflow:hidden;background:linear-gradient(#0e2a33aa 1px,transparent 1px) 0 0/100% 25%;border-radius:10px}.bars{position:absolute;inset:15px 20px 20px;display:flex;align-items:end;gap:10px}.bars i{flex:1;background:linear-gradient(to top,#087f9b, #15d4cf);border-radius:5px 5px 0 0;opacity:.8}.chart-line{position:absolute;left:20px;right:20px;bottom:55px;height:80px;border-top:2px solid #fff;transform:skewY(-10deg);opacity:.25}.plan-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}.plan-card{background:linear-gradient(150deg,#0c222c,#08171f);border:1px solid var(--line);border-radius:14px;padding:20px}.plan-card h3{margin:13px 0 4px}.plan-amount{font-size:27px;font-weight:800;margin:16px 0}.plan-meta{display:grid;gap:9px;margin-bottom:18px;color:var(--muted)}.plan-meta b{color:#e8fbff;float:right}.primary{border:0;border-radius:8px;background:linear-gradient(135deg,var(--cyan),#0c9fbe);color:#03161a;font-weight:800;padding:11px 17px}.primary:hover{filter:brightness(1.08)}.wide{width:100%}.outline,.ghost{border:1px solid #24505d;border-radius:8px;background:#0b1e27;color:#d7f7fb;padding:10px 15px}.ghost{background:transparent;border-color:transparent}.link{border:0;background:transparent;color:var(--cyan)}label{display:block;color:#a8c3ca;margin:13px 0 7px}.panel input,.panel select,.panel textarea,.auth-card input{width:100%;background:#07151d;border:1px solid #21434e;color:#eafcff;border-radius:8px;padding:11px;outline:none}.panel input:focus,.panel select:focus,.panel textarea:focus{border-color:var(--cyan)}.badge{display:inline-flex;padding:4px 8px;border-radius:99px;font-size:10px;text-transform:capitalize;border:1px solid #31505b;background:#10232b;color:#9db5bd}.badge.green,.badge.approved,.badge.completed,.badge.active{color:#57e69b;background:#103124;border-color:#1f6d49}.badge.red,.badge.rejected{color:#ff7b83;background:#35171b;border-color:#74343a}.badge.pending{color:#ffd66e;background:#352c13;border-color:#705b23}.badge.blue{color:#62baff;background:#102a3b;border-color:#215a7e}.payment-method{padding:13px;border:1px solid var(--line);border-radius:10px;margin:10px 0;background:#091922;display:grid;gap:5px}.payment-method strong{font-size:19px;color:var(--cyan)}.payment-method small{color:var(--muted)}.form-panel{max-width:650px}.available{display:flex;justify-content:space-between;padding:14px;border-radius:8px;background:#092a30;margin-bottom:14px}.available b{color:var(--cyan)}.table-wrap{overflow:auto}table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:13px;border-bottom:1px solid #16343e;white-space:nowrap}th{color:#8baab3;font-size:11px;text-transform:uppercase}.empty,.error{padding:30px;text-align:center;color:var(--muted)}.error{color:#ff9097}.profile{text-align:center;max-width:620px;margin:auto}.avatar{width:70px;height:70px;border-radius:50%;display:grid;place-items:center;margin:0 auto 12px;background:linear-gradient(135deg,#12c9d0,#1d70d9);font-size:28px;font-weight:900}.profile-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:25px 0}.profile-grid div{background:#091a23;border:1px solid var(--line);padding:14px;border-radius:9px}.profile-grid small,.profile-grid b{display:block}.profile-grid small{color:var(--muted);margin-bottom:5px}.code{font-size:14px;color:var(--cyan)}.auth-wrap{min-height:100vh;display:grid;place-items:center;padding:20px;background:radial-gradient(circle at top right,#0c4d5a,#061118 55%)}.auth-card{width:min(440px,100%);background:#0a1d26;border:1px solid #1d4652;border-radius:16px;padding:28px;box-shadow:0 25px 70px #0008}.big{justify-content:center;margin-bottom:22px}.tabs{display:flex;border-bottom:1px solid var(--line);margin-bottom:18px}.tabs button{flex:1;background:none;border:0;color:#78939c;padding:12px}.tabs button.active{color:#eaffff;border-bottom:2px solid var(--cyan)}.form-msg{color:#ff9a9f;min-height:20px;margin-top:10px}.mobile-nav{display:none}#toast{position:fixed;right:20px;bottom:20px;background:#dffcff;color:#032028;padding:12px 16px;border-radius:9px;font-weight:700;transform:translateY(20px);opacity:0;pointer-events:none;transition:.25s;z-index:99}#toast.show{transform:translateY(0);opacity:1}@media(max-width:1000px){.stats{grid-template-columns:repeat(2,1fr)}.grid2{grid-template-columns:1fr}.plan-grid{grid-template-columns:repeat(2,1fr)}}@media(max-width:720px){.side{display:none}.top{padding:0 15px}.mobile-nav{display:flex;position:sticky;top:0;z-index:10;background:#07151d;border-bottom:1px solid var(--line);overflow:auto}.mobile-nav button{background:transparent;border:0;color:#90aab2;padding:11px 15px;white-space:nowrap}.mobile-nav button.active{color:var(--cyan)}main{padding:18px 13px}.stats{grid-template-columns:1fr 1fr}.plan-grid{grid-template-columns:1fr}.page-head{align-items:flex-start;flex-direction:column}.row-item,.investment{grid-template-columns:1fr auto}.row-item .badge,.investment .badge{grid-column:2}.top-actions span{display:none}}
+
+<!doctype html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>SmartInvestment</title><link rel="stylesheet" href="/src/styles.css"></head><body><div id="app"></div><script type="module" src="/src/main.js"></script></body></html>
+
+{
+  "name": "smartinvestment-client",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": { "dev": "vite --host 0.0.0.0 --port 5173", "build": "vite build", "preview": "vite preview --host 0.0.0.0 --port 5173" },
+  "devDependencies": { "vite": "^7.1.7" }
+}
+
+VITE_API_URL=http://localhost:4000/api
+
+CREATE DATABASE IF NOT EXISTS smart_investment CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE smart_investment;
+
+CREATE TABLE IF NOT EXISTS admins (
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+ username VARCHAR(60) NOT NULL UNIQUE,
+ email VARCHAR(160) NOT NULL UNIQUE,
+ password_hash VARCHAR(255) NOT NULL,
+ role ENUM('admin','super_admin') NOT NULL DEFAULT 'admin',
+ status ENUM('active','disabled') NOT NULL DEFAULT 'active',
+ created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS users (
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+ username VARCHAR(60) NOT NULL UNIQUE,
+ email VARCHAR(160) NULL UNIQUE,
+ phone VARCHAR(30) NULL,
+ password_hash VARCHAR(255) NOT NULL,
+ referral_code VARCHAR(30) NOT NULL UNIQUE,
+ referred_by_user_id BIGINT UNSIGNED NULL,
+ balance DECIMAL(18,2) NOT NULL DEFAULT 0,
+ referral_earnings DECIMAL(18,2) NOT NULL DEFAULT 0,
+ status ENUM('active','suspended') NOT NULL DEFAULT 'active',
+ created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ CONSTRAINT fk_users_referrer FOREIGN KEY(referred_by_user_id) REFERENCES users(id) ON DELETE SET NULL,
+ INDEX idx_users_status(status), INDEX idx_users_created(created_at)
+);
+
+CREATE TABLE IF NOT EXISTS investment_plans (
+ id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+ name VARCHAR(80) NOT NULL UNIQUE,
+ amount DECIMAL(18,2) NOT NULL,
+ daily_rate DECIMAL(8,4) NOT NULL DEFAULT 0,
+ validity_days INT UNSIGNED NOT NULL,
+ status ENUM('active','disabled') NOT NULL DEFAULT 'active',
+ sort_order INT UNSIGNED NOT NULL DEFAULT 0,
+ created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS payment_settings (
+ id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+ method ENUM('easypaisa','jazzcash','bank') NOT NULL UNIQUE,
+ enabled BOOLEAN NOT NULL DEFAULT FALSE,
+ account_name VARCHAR(160) NULL,
+ account_number VARCHAR(160) NULL,
+ instructions TEXT NULL,
+ updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS deposits (
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+ user_id BIGINT UNSIGNED NOT NULL,
+ amount DECIMAL(18,2) NOT NULL,
+ method VARCHAR(40) NOT NULL,
+ reference VARCHAR(120) NULL UNIQUE,
+ screenshot VARCHAR(255) NULL,
+ status ENUM('pending','approved','rejected') NOT NULL DEFAULT 'pending',
+ rejection_reason VARCHAR(500) NULL,
+ reviewed_by BIGINT UNSIGNED NULL,
+ created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ reviewed_at TIMESTAMP NULL,
+ FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+ FOREIGN KEY(reviewed_by) REFERENCES admins(id) ON DELETE SET NULL,
+ INDEX idx_deposits_status(status), INDEX idx_deposits_user(user_id), INDEX idx_deposits_created(created_at)
+);
+
+CREATE TABLE IF NOT EXISTS investments (
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+ user_id BIGINT UNSIGNED NOT NULL,
+ plan_id INT UNSIGNED NOT NULL,
+ amount DECIMAL(18,2) NOT NULL,
+ daily_rate DECIMAL(8,4) NOT NULL,
+ validity_days INT UNSIGNED NOT NULL,
+ start_at DATETIME NOT NULL,
+ end_at DATETIME NOT NULL,
+ status ENUM('active','completed') NOT NULL DEFAULT 'active',
+ created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+ FOREIGN KEY(plan_id) REFERENCES investment_plans(id),
+ INDEX idx_investments_user(user_id), INDEX idx_investments_status(status)
+);
+
+CREATE TABLE IF NOT EXISTS withdrawals (
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+ user_id BIGINT UNSIGNED NOT NULL,
+ amount DECIMAL(18,2) NOT NULL,
+ method VARCHAR(40) NOT NULL,
+ account_details VARCHAR(1200) NOT NULL,
+ reference VARCHAR(100) NULL UNIQUE,
+ status ENUM('pending','processing','completed','rejected') NOT NULL DEFAULT 'pending',
+ rejection_reason VARCHAR(500) NULL,
+ reviewed_by BIGINT UNSIGNED NULL,
+ created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ reviewed_at TIMESTAMP NULL,
+ FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+ FOREIGN KEY(reviewed_by) REFERENCES admins(id) ON DELETE SET NULL,
+ INDEX idx_withdrawals_status(status), INDEX idx_withdrawals_user(user_id)
+);
+
+CREATE TABLE IF NOT EXISTS transactions (
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+ user_id BIGINT UNSIGNED NOT NULL,
+ type ENUM('deposit','withdrawal','investment','referral_reward','adjustment') NOT NULL,
+ amount DECIMAL(18,2) NOT NULL,
+ reference VARCHAR(120) NULL UNIQUE,
+ status ENUM('pending','approved','completed','rejected') NOT NULL,
+ description VARCHAR(500) NULL,
+ created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+ INDEX idx_transactions_user(user_id), INDEX idx_transactions_type(type), INDEX idx_transactions_created(created_at)
+);
+
+CREATE TABLE IF NOT EXISTS referrals (
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+ referrer_user_id BIGINT UNSIGNED NOT NULL,
+ referred_user_id BIGINT UNSIGNED NOT NULL UNIQUE,
+ referral_code VARCHAR(30) NOT NULL,
+ status ENUM('valid','invalid') NOT NULL DEFAULT 'valid',
+ created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ FOREIGN KEY(referrer_user_id) REFERENCES users(id) ON DELETE CASCADE,
+ FOREIGN KEY(referred_user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS referral_rewards (
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+ referral_id BIGINT UNSIGNED NOT NULL,
+ referrer_user_id BIGINT UNSIGNED NOT NULL,
+ referred_user_id BIGINT UNSIGNED NOT NULL,
+ source_deposit_id BIGINT UNSIGNED NULL,
+ amount DECIMAL(18,2) NOT NULL,
+ status ENUM('pending','paid','invalid') NOT NULL DEFAULT 'pending',
+ created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ paid_at TIMESTAMP NULL,
+ FOREIGN KEY(referral_id) REFERENCES referrals(id) ON DELETE CASCADE,
+ FOREIGN KEY(referrer_user_id) REFERENCES users(id) ON DELETE CASCADE,
+ FOREIGN KEY(referred_user_id) REFERENCES users(id) ON DELETE CASCADE,
+ FOREIGN KEY(source_deposit_id) REFERENCES deposits(id) ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS notifications (
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+ user_id BIGINT UNSIGNED NOT NULL,
+ title VARCHAR(160) NOT NULL,
+ message VARCHAR(1000) NOT NULL,
+ read_at TIMESTAMP NULL,
+ created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+ INDEX idx_notifications_user(user_id)
+);
+
+CREATE TABLE IF NOT EXISTS audit_logs (
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+ admin_id BIGINT UNSIGNED NOT NULL,
+ action VARCHAR(100) NOT NULL,
+ target_type VARCHAR(80) NULL,
+ target_id VARCHAR(80) NULL,
+ change_info TEXT NULL,
+ created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ FOREIGN KEY(admin_id) REFERENCES admins(id) ON DELETE CASCADE,
+ INDEX idx_audit_created(created_at)
+);
+
+CREATE TABLE IF NOT EXISTS platform_settings (
+ setting_key VARCHAR(80) PRIMARY KEY,
+ setting_value TEXT NOT NULL,
+ updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+require('dotenv').config();
+const express=require('express');
+const cors=require('cors');
+const bcrypt=require('bcryptjs');
+const jwt=require('jsonwebtoken');
+const mysql=require('mysql2/promise');
+const multer=require('multer');
+const path=require('path');
+const fs=require('fs');
+
+const app=express();
+const PORT=Number(process.env.PORT||4000);
+const JWT_SECRET=process.env.JWT_SECRET||'CHANGE_THIS_SECRET';
+const pool=mysql.createPool({host:process.env.DB_HOST||'127.0.0.1',port:Number(process.env.DB_PORT||3306),user:process.env.DB_USER||'root',password:process.env.DB_PASSWORD||'',database:process.env.DB_NAME||'smart_investment',waitForConnections:true,connectionLimit:10,decimalNumbers:true});
+const uploadDir=path.join(__dirname,'uploads','payment-proofs');fs.mkdirSync(uploadDir,{recursive:true});
+const upload=multer({dest:uploadDir,limits:{fileSize:5*1024*1024},fileFilter:(req,file,cb)=>cb(null,/^image\//.test(file.mimetype))});
+const allowedOrigins=(process.env.CORS_ORIGIN||'http://localhost:5173,http://localhost:5174').split(',').map(x=>x.trim());
+app.use(cors({origin:(origin,cb)=>{if(!origin||allowedOrigins.includes(origin))return cb(null,true);cb(new Error('CORS origin not allowed'))}}));
+app.use(express.json({limit:'2mb'}));
+app.use('/uploads',express.static(path.join(__dirname,'uploads')));
+
+const sign=(payload)=>jwt.sign(payload,JWT_SECRET,{expiresIn:'7d'});
+function tokenFrom(req){return (req.headers.authorization||'').replace(/^Bearer\s+/,'')}
+function auth(req,res,next){try{const t=tokenFrom(req);if(!t)throw Error();req.auth=jwt.verify(t,JWT_SECRET);next()}catch{return res.status(401).json({error:'Authentication required or session expired.'})}}
+function adminOnly(req,res,next){auth(req,res,()=>{if(req.auth.role!=='admin'&&req.auth.role!=='super_admin')return res.status(403).json({error:'Admin access required.'});next()})}
+function bad(res,msg){return res.status(400).json({error:msg})}
+function ref(prefix){return prefix+'-'+Date.now().toString(36).toUpperCase()+'-'+Math.floor(1000+Math.random()*9000)}
+async function audit(adminId,action,targetType,targetId,info){await pool.query('INSERT INTO audit_logs(admin_id,action,target_type,target_id,change_info) VALUES(?,?,?,?,?)',[adminId,action,targetType,targetId,JSON.stringify(info||{})])}
+async function setting(key,def=''){const [r]=await pool.query('SELECT setting_value FROM platform_settings WHERE setting_key=?',[key]);return r[0]?.setting_value??def}
+async function setSetting(key,value){await pool.query('INSERT INTO platform_settings(setting_key,setting_value) VALUES(?,?) ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value)',[key,String(value)])}
+
+app.get('/api/health',async(req,res)=>{try{await pool.query('SELECT 1');res.json({ok:true,database:true})}catch(e){res.status(500).json({ok:false,database:false,error:e.message})}});
+
+// Customer authentication
+app.post('/api/auth/signup',async(req,res)=>{try{const username=String(req.body.username||'').trim(),password=String(req.body.password||''),refCode=String(req.body.referralCode||'').trim().toUpperCase();if(!/^[a-zA-Z0-9_]{3,60}$/.test(username))return bad(res,'Username must be 3-60 letters, numbers or underscore.');if(password.length<6)return bad(res,'Password must be at least 6 characters.');const [dup]=await pool.query('SELECT id FROM users WHERE username=?',[username]);if(dup.length)return res.status(409).json({error:'Username already exists.'});let referrer=null;if(refCode){const [r]=await pool.query('SELECT id,referral_code FROM users WHERE referral_code=? AND status="active"',[refCode]);if(!r.length)return bad(res,'Invalid referral code.');referrer=r[0]}
+ let code;for(let i=0;i<20;i++){const c='SI'+Math.random().toString(36).slice(2,8).toUpperCase();const [x]=await pool.query('SELECT id FROM users WHERE referral_code=?',[c]);if(!x.length){code=c;break}}if(!code)throw Error('Could not generate referral code.');const hash=await bcrypt.hash(password,12);const conn=await pool.getConnection();try{await conn.beginTransaction();const [r]=await conn.query('INSERT INTO users(username,password_hash,referral_code,referred_by_user_id) VALUES(?,?,?,?)',[username,hash,code,referrer?.id||null]);if(referrer)await conn.query('INSERT INTO referrals(referrer_user_id,referred_user_id,referral_code) VALUES(?,?,?)',[referrer.id,r.insertId,code]);await conn.commit();const [u]=await conn.query('SELECT id,username,email,phone,referral_code,balance,referral_earnings,status,created_at FROM users WHERE id=?',[r.insertId]);res.status(201).json({token:sign({id:r.insertId,role:'user',username}),user:u[0]})}catch(e){await conn.rollback();throw e}finally{conn.release()}}catch(e){res.status(500).json({error:e.message})}});
+app.post('/api/auth/login',async(req,res)=>{try{const username=String(req.body.username||'').trim(),password=String(req.body.password||'');const [r]=await pool.query('SELECT * FROM users WHERE username=?',[username]);if(!r.length||!(await bcrypt.compare(password,r[0].password_hash)))return res.status(401).json({error:'Invalid username or password.'});if(r[0].status!=='active')return res.status(403).json({error:'Your account is suspended.'});res.json({token:sign({id:r[0].id,role:'user',username:r[0].username}),user:r[0]})}catch(e){res.status(500).json({error:e.message})}});
+app.post('/api/auth/change-password',auth,async(req,res)=>{try{if(req.auth.role!=='user')return res.status(403).json({error:'Invalid user session.'});const cur=String(req.body.currentPassword||''),next=String(req.body.newPassword||'');if(next.length<6)return bad(res,'New password must be at least 6 characters.');const [r]=await pool.query('SELECT password_hash FROM users WHERE id=?',[req.auth.id]);if(!r.length||!(await bcrypt.compare(cur,r[0].password_hash)))return res.status(401).json({error:'Current password is incorrect.'});await pool.query('UPDATE users SET password_hash=? WHERE id=?',[await bcrypt.hash(next,12),req.auth.id]);res.json({message:'Password changed successfully.'})}catch(e){res.status(500).json({error:e.message})}});
+
+// Public/customer data
+app.get('/api/settings/public',async(req,res)=>{try{const [m]=await pool.query('SELECT method,enabled,account_name,account_number,instructions FROM payment_settings ORDER BY id');res.json({methods:m.map(x=>({name:x.method==='easypaisa'?'EasyPaisa':x.method==='jazzcash'?'JazzCash':'Bank Transfer',enabled:!!x.enabled,account_name:x.account_name,account_number:x.account_number,instructions:x.instructions}))})}catch(e){res.status(500).json({error:e.message})}});
+app.get('/api/plans',async(req,res)=>{try{const [r]=await pool.query('SELECT id,name,amount,daily_rate,validity_days AS duration_days FROM investment_plans WHERE status="active" ORDER BY sort_order,id');res.json(r)}catch(e){res.status(500).json({error:e.message})}});
+app.get('/api/profile',auth,async(req,res)=>{try{if(req.auth.role!=='user')return res.status(403).json({error:'Invalid user session.'});const [r]=await pool.query('SELECT id,username,email,phone,referral_code,referred_by_user_id,balance,referral_earnings,status,created_at FROM users WHERE id=?',[req.auth.id]);if(!r.length)return res.status(404).json({error:'User not found.'});res.json(r[0])}catch(e){res.status(500).json({error:e.message})}});
+app.get('/api/investments',auth,async(req,res)=>{try{const [r]=await pool.query('SELECT i.*,p.name AS plan_name FROM investments i JOIN investment_plans p ON p.id=i.plan_id WHERE i.user_id=? ORDER BY i.id DESC',[req.auth.id]);res.json(r)}catch(e){res.status(500).json({error:e.message})}});
+app.post('/api/investments',auth,async(req,res)=>{const conn=await pool.getConnection();try{const planId=Number(req.body.planId);if(!Number.isInteger(planId))return bad(res,'Invalid plan.');await conn.beginTransaction();const [p]=await conn.query('SELECT * FROM investment_plans WHERE id=? AND status="active" FOR UPDATE',[planId]);if(!p.length){await conn.rollback();return bad(res,'Investment plan is not active.')}const plan=p[0];const [u]=await conn.query('SELECT balance,status FROM users WHERE id=? FOR UPDATE',[req.auth.id]);if(!u.length||u[0].status!=='active'){await conn.rollback();return res.status(403).json({error:'Account is not active.'})}if(Number(u[0].balance)<Number(plan.amount)){await conn.rollback();return bad(res,'Insufficient balance. Deposit funds first.')}const start=new Date();const end=new Date(start.getTime()+Number(plan.validity_days)*86400000);const [i]=await conn.query('INSERT INTO investments(user_id,plan_id,amount,daily_rate,validity_days,start_at,end_at) VALUES(?,?,?,?,?,?,?)',[req.auth.id,plan.id,plan.amount,plan.daily_rate,plan.validity_days,start,end]);await conn.query('UPDATE users SET balance=balance-? WHERE id=?',[plan.amount,req.auth.id]);await conn.query('INSERT INTO transactions(user_id,type,amount,reference,status,description) VALUES(?,?,?,?,?,?)',[req.auth.id,'investment',plan.amount,ref('INV'),'completed','Investment created']);await conn.query('INSERT INTO notifications(user_id,title,message) VALUES(?,?,?)',[req.auth.id,'Investment started',`${plan.name} investment has been created successfully.`]);await conn.commit();res.status(201).json({message:'Investment created successfully.',investmentId:i.insertId})}catch(e){await conn.rollback();res.status(500).json({error:e.message})}finally{conn.release()}});
+app.post('/api/deposits',auth,upload.single('paymentScreenshot'),async(req,res)=>{try{const amount=Number(req.body.amount),method=String(req.body.method||'').trim().toLowerCase(),reference=String(req.body.reference||'').trim();let planAmount=null;if(req.body.planId){const [p]=await pool.query('SELECT amount FROM investment_plans WHERE id=? AND status="active"',[Number(req.body.planId)]);planAmount=p[0]?.amount}const finalAmount=amount||Number(planAmount);if(!(finalAmount>0))return bad(res,'Valid deposit amount is required.');if(!['easypaisa','jazzcash','bank'].includes(method))return bad(res,'Invalid payment method.');if(!reference&&!req.file)return bad(res,'Transaction reference or screenshot is required.');if(reference){const [x]=await pool.query('SELECT id FROM deposits WHERE reference=?',[reference]);if(x.length)return res.status(409).json({error:'This transaction reference has already been submitted.'})}const shot=req.file?'/uploads/payment-proofs/'+path.basename(req.file.path):null;const [r]=await pool.query('INSERT INTO deposits(user_id,amount,method,reference,screenshot) VALUES(?,?,?,?,?)',[req.auth.id,finalAmount,method,reference||null,shot]);await pool.query('INSERT INTO transactions(user_id,type,amount,reference,status,description) VALUES(?,?,?,?,?,?)',[req.auth.id,'deposit',finalAmount,'DEP-'+r.insertId,'pending','Deposit submitted for verification']);res.status(201).json({message:'Deposit request submitted for admin review.',id:r.insertId})}catch(e){res.status(500).json({error:e.message})}});
+app.get('/api/transactions',auth,async(req,res)=>{try{const [r]=await pool.query('SELECT id,type,amount,reference,status,description,created_at FROM transactions WHERE user_id=? ORDER BY id DESC',[req.auth.id]);res.json(r)}catch(e){res.status(500).json({error:e.message})}});
+app.get('/api/referrals',auth,async(req,res)=>{try{const [u]=await pool.query('SELECT referral_code,referral_earnings FROM users WHERE id=?',[req.auth.id]);const [r]=await pool.query('SELECT u.username,u.created_at,COALESCE(rr.status,"pending") reward_status FROM referrals rf JOIN users u ON u.id=rf.referred_user_id LEFT JOIN referral_rewards rr ON rr.referral_id=rf.id WHERE rf.referrer_user_id=? ORDER BY rf.id DESC',[req.auth.id]);res.json({code:u[0].referral_code,earnings:u[0].referral_earnings,total:r.length,users:r})}catch(e){res.status(500).json({error:e.message})}});
+app.post('/api/withdrawals',auth,async(req,res)=>{try{const amount=Number(req.body.amount),method=String(req.body.method||'').trim(),account=String(req.body.account||'').trim();if(!(amount>0)||!method||account.length<4)return bad(res,'Valid amount, method and account details are required.');const [u]=await pool.query('SELECT balance,status FROM users WHERE id=?',[req.auth.id]);if(!u.length||u[0].status!=='active')return res.status(403).json({error:'Account is not active.'});const [p]=await pool.query('SELECT COALESCE(SUM(amount),0) reserved FROM withdrawals WHERE user_id=? AND status IN ("pending","processing")',[req.auth.id]);const available=Number(u[0].balance)-Number(p[0].reserved);if(amount>available)return bad(res,'Insufficient available balance.');const reference=ref('WD');const [r]=await pool.query('INSERT INTO withdrawals(user_id,amount,method,account_details,reference) VALUES(?,?,?,?,?)',[req.auth.id,amount,method,account,reference]);await pool.query('INSERT INTO transactions(user_id,type,amount,reference,status,description) VALUES(?,?,?,?,?,?)',[req.auth.id,'withdrawal',amount,reference,'pending','Withdrawal request submitted']);res.status(201).json({message:'Withdrawal request submitted.',id:r.insertId})}catch(e){res.status(500).json({error:e.message})}});
+app.get('/api/withdrawals',auth,async(req,res)=>{try{const [r]=await pool.query('SELECT id,amount,method,account_details,reference,status,created_at,reviewed_at FROM withdrawals WHERE user_id=? ORDER BY id DESC',[req.auth.id]);res.json(r)}catch(e){res.status(500).json({error:e.message})}});
+
+// Admin auth
+app.post('/api/admin/auth/login',async(req,res)=>{try{const login=String(req.body.login||'').trim(),password=String(req.body.password||'');const [r]=await pool.query('SELECT * FROM admins WHERE username=? OR email=? LIMIT 1',[login,login]);if(!r.length||!(await bcrypt.compare(password,r[0].password_hash)))return res.status(401).json({error:'Invalid admin credentials.'});if(r[0].status!=='active')return res.status(403).json({error:'Admin account is disabled.'});res.json({token:sign({id:r[0].id,role:r[0].role,username:r[0].username}),admin:{id:r[0].id,username:r[0].username,email:r[0].email,role:r[0].role}})}catch(e){res.status(500).json({error:e.message})}});
+app.get('/api/admin/me',adminOnly,async(req,res)=>{const [r]=await pool.query('SELECT id,username,email,role,status FROM admins WHERE id=?',[req.auth.id]);res.json(r[0])});
+
+// Admin dashboard
+app.get('/api/admin/dashboard',adminOnly,async(req,res)=>{try{const [[u]] =await pool.query('SELECT COUNT(*) total FROM users');const [[d]] =await pool.query('SELECT COALESCE(SUM(amount),0) total FROM deposits WHERE status="approved"');const [[pd]]=await pool.query('SELECT COUNT(*) total FROM deposits WHERE status="pending"');const [[pw]]=await pool.query('SELECT COUNT(*) total FROM withdrawals WHERE status IN ("pending","processing")');const [[ai]]=await pool.query('SELECT COUNT(*) total FROM investments WHERE status="active"');const [[tx]]=await pool.query('SELECT COUNT(*) total FROM transactions');const [recent]=await pool.query('SELECT d.*,u.username FROM deposits d JOIN users u ON u.id=d.user_id ORDER BY d.id DESC LIMIT 7');const [plans]=await pool.query('SELECT p.id,p.name,COUNT(i.id) cnt FROM investment_plans p LEFT JOIN investments i ON i.plan_id=p.id GROUP BY p.id,p.name ORDER BY cnt DESC LIMIT 3');const totalPlan=plans.reduce((a,x)=>a+Number(x.cnt),0)||1;res.json({totalUsers:u.total,totalDeposits:d.total,pendingDeposits:pd.total,pendingWithdrawals:pw.total,activeInvestments:ai.total,totalTransactions:tx.total,investmentShare:65,planBreakdown:plans.map(x=>Math.round(Number(x.cnt)/totalPlan*100)),recentDeposits:recent})}catch(e){res.status(500).json({error:e.message})}});
+app.get('/api/admin/users',adminOnly,async(req,res)=>{try{const [r]=await pool.query('SELECT id,username,email,phone,referral_code,balance,referral_earnings,created_at,status FROM users ORDER BY id DESC');res.json(r)}catch(e){res.status(500).json({error:e.message})}});
+app.patch('/api/admin/users/:id/status',adminOnly,async(req,res)=>{try{const status=req.body.status;if(!['active','suspended'].includes(status))return bad(res,'Invalid status.');await pool.query('UPDATE users SET status=? WHERE id=?',[status,req.params.id]);await audit(req.auth.id,'UPDATE_USER_STATUS','user',req.params.id,{status});res.json({message:'User status updated.'})}catch(e){res.status(500).json({error:e.message})}});
+app.get('/api/admin/deposits',adminOnly,async(req,res)=>{try{const [r]=await pool.query('SELECT d.*,u.username,ps.method AS configured_method FROM deposits d JOIN users u ON u.id=d.user_id LEFT JOIN payment_settings ps ON ps.method=d.method ORDER BY d.id DESC');res.json(r.map(x=>({...x,method:x.method,reference:x.reference,screenshot:x.screenshot}))) }catch(e){res.status(500).json({error:e.message})}});
+app.post('/api/admin/deposits/:id/approve',adminOnly,async(req,res)=>{const c=await pool.getConnection();try{await c.beginTransaction();const [d]=await c.query('SELECT * FROM deposits WHERE id=? FOR UPDATE',[req.params.id]);if(!d.length||d[0].status!=='pending'){await c.rollback();return bad(res,'Deposit is no longer pending.')}const dep=d[0];await c.query('UPDATE deposits SET status="approved",reviewed_by=?,reviewed_at=NOW() WHERE id=?',[req.auth.id,dep.id]);const [tx]=await c.query('SELECT id FROM transactions WHERE user_id=? AND type="deposit" AND reference=? LIMIT 1',[dep.user_id,'DEP-'+dep.id]);await c.query('UPDATE users SET balance=balance+? WHERE id=?',[dep.amount,dep.user_id]);if(tx.length)await c.query('UPDATE transactions SET status="approved",amount=?,description=? WHERE id=?',[dep.amount,'Deposit approved and credited',tx[0].id]);else await c.query('INSERT INTO transactions(user_id,type,amount,reference,status,description) VALUES(?,?,?,?,?,?)',[dep.user_id,'deposit',dep.amount,'DEP-'+dep.id,'approved','Deposit approved and credited']);await c.query('INSERT INTO notifications(user_id,title,message) VALUES(?,?,?)',[dep.user_id,'Deposit approved',`Your deposit of PKR ${Number(dep.amount).toLocaleString()} has been approved.`]);const rate=Number(await setting('referral_rate','5'));if(rate>0){const [rf]=await c.query('SELECT * FROM referrals WHERE referred_user_id=? AND status="valid"',[dep.user_id]);if(rf.length){const reward=Number(dep.amount)*rate/100;await c.query('INSERT INTO referral_rewards(referral_id,referrer_user_id,referred_user_id,source_deposit_id,amount,status,paid_at) VALUES(?,?,?,?,?,"paid",NOW())',[rf[0].id,rf[0].referrer_user_id,dep.user_id,dep.id,reward]);await c.query('UPDATE users SET balance=balance+?,referral_earnings=referral_earnings+? WHERE id=?',[reward,reward,rf[0].referrer_user_id]);await c.query('INSERT INTO transactions(user_id,type,amount,reference,status,description) VALUES(?,?,?,?,?,?)',[rf[0].referrer_user_id,'referral_reward',reward,ref('REF'),'completed','Referral reward for approved deposit']);}}await c.commit();await audit(req.auth.id,'APPROVE_DEPOSIT','deposit',dep.id,{amount:dep.amount,user_id:dep.user_id});res.json({message:'Deposit approved and credited.'})}catch(e){await c.rollback();res.status(500).json({error:e.message})}finally{c.release()}});
+app.post('/api/admin/deposits/:id/reject',adminOnly,async(req,res)=>{try{const reason=String(req.body.reason||'Rejected by admin');const [r]=await pool.query('UPDATE deposits SET status="rejected",rejection_reason=?,reviewed_by=?,reviewed_at=NOW() WHERE id=? AND status="pending"',[reason,req.auth.id,req.params.id]);if(!r.affectedRows)return bad(res,'Deposit is no longer pending.');await pool.query('UPDATE transactions SET status="rejected",description=? WHERE type="deposit" AND reference=?',[reason,'DEP-'+req.params.id]);await audit(req.auth.id,'REJECT_DEPOSIT','deposit',req.params.id,{reason});res.json({message:'Deposit rejected.'})}catch(e){res.status(500).json({error:e.message})}});
+app.get('/api/admin/withdrawals',adminOnly,async(req,res)=>{try{const [r]=await pool.query('SELECT w.*,u.username,u.balance FROM withdrawals w JOIN users u ON u.id=w.user_id ORDER BY w.id DESC');res.json(r.map(x=>({...x,available_balance:Number(x.balance)})))}catch(e){res.status(500).json({error:e.message})}});
+app.post('/api/admin/withdrawals/:id/processing',adminOnly,async(req,res)=>{try{const [r]=await pool.query('UPDATE withdrawals SET status="processing",reviewed_by=?,reviewed_at=NOW() WHERE id=? AND status="pending"',[req.auth.id,req.params.id]);if(!r.affectedRows)return bad(res,'Withdrawal is no longer pending.');await audit(req.auth.id,'PROCESS_WITHDRAWAL','withdrawal',req.params.id,{});res.json({message:'Withdrawal marked processing.'})}catch(e){res.status(500).json({error:e.message})}});
+app.post('/api/admin/withdrawals/:id/approve',adminOnly,async(req,res)=>{const c=await pool.getConnection();try{await c.beginTransaction();const [w]=await c.query('SELECT * FROM withdrawals WHERE id=? FOR UPDATE',[req.params.id]);if(!w.length||!['pending','processing'].includes(w[0].status)){await c.rollback();return bad(res,'Withdrawal cannot be completed.')}const wd=w[0];const [u]=await c.query('SELECT balance FROM users WHERE id=? FOR UPDATE',[wd.user_id]);if(Number(u[0].balance)<Number(wd.amount)){await c.rollback();return bad(res,'User balance is no longer sufficient.')}await c.query('UPDATE users SET balance=balance-? WHERE id=?',[wd.amount,wd.user_id]);await c.query('UPDATE withdrawals SET status="completed",reviewed_by=?,reviewed_at=NOW() WHERE id=?',[req.auth.id,wd.id]);await c.query('UPDATE transactions SET status="completed",description=? WHERE user_id=? AND type="withdrawal" AND reference=?',[ 'Withdrawal completed',wd.user_id,wd.reference]);await c.query('INSERT INTO notifications(user_id,title,message) VALUES(?,?,?)',[wd.user_id,'Withdrawal completed',`Your withdrawal of PKR ${Number(wd.amount).toLocaleString()} has been completed.`]);await c.commit();await audit(req.auth.id,'COMPLETE_WITHDRAWAL','withdrawal',wd.id,{amount:wd.amount});res.json({message:'Withdrawal completed.'})}catch(e){await c.rollback();res.status(500).json({error:e.message})}finally{c.release()}});
+app.post('/api/admin/withdrawals/:id/reject',adminOnly,async(req,res)=>{try{const reason=String(req.body.reason||'Rejected by admin');const [r]=await pool.query('UPDATE withdrawals SET status="rejected",rejection_reason=?,reviewed_by=?,reviewed_at=NOW() WHERE id=? AND status IN ("pending","processing")',[reason,req.auth.id,req.params.id]);if(!r.affectedRows)return bad(res,'Withdrawal cannot be rejected.');await pool.query('UPDATE transactions SET status="rejected",description=? WHERE type="withdrawal" AND reference=(SELECT reference FROM withdrawals WHERE id=?)',[reason,req.params.id]);await audit(req.auth.id,'REJECT_WITHDRAWAL','withdrawal',req.params.id,{reason});res.json({message:'Withdrawal rejected.'})}catch(e){res.status(500).json({error:e.message})}});
+app.get('/api/admin/plans',adminOnly,async(req,res)=>{try{const [r]=await pool.query('SELECT id,name,amount,daily_rate,validity_days AS duration_days,status,sort_order FROM investment_plans ORDER BY sort_order,id');res.json(r.map(x=>({...x,active:x.status==='active'})))}catch(e){res.status(500).json({error:e.message})}});
+app.put('/api/admin/plans/:id',adminOnly,async(req,res)=>{try{const name=String(req.body.name||'').trim(),amount=Number(req.body.amount),rate=Number(req.body.daily_rate),days=Number(req.body.validity_days);if(!name||!(amount>0)||rate<0||!(days>0))return bad(res,'Invalid plan values.');await pool.query('UPDATE investment_plans SET name=?,amount=?,daily_rate=?,validity_days=? WHERE id=?',[name,amount,rate,days,req.params.id]);await audit(req.auth.id,'UPDATE_PLAN','investment_plan',req.params.id,{name,amount,rate,days});res.json({message:'Plan saved.'})}catch(e){res.status(500).json({error:e.message})}});
+app.patch('/api/admin/plans/:id',adminOnly,async(req,res)=>{try{const status=req.body.active?'active':'disabled';await pool.query('UPDATE investment_plans SET status=? WHERE id=?',[status,req.params.id]);await audit(req.auth.id,status==='active'?'ENABLE_PLAN':'DISABLE_PLAN','investment_plan',req.params.id,{status});res.json({message:'Plan status updated.'})}catch(e){res.status(500).json({error:e.message})}});
+app.get('/api/admin/payment-settings',adminOnly,async(req,res)=>{try{const [r]=await pool.query('SELECT method,enabled,account_name,account_number,instructions FROM payment_settings');const o={};r.forEach(x=>o[x.method]=x);res.json({easypaisa:o.easypaisa||{},jazzcash:o.jazzcash||{},bank:o.bank||{}})}catch(e){res.status(500).json({error:e.message})}});
+app.put('/api/admin/payment-settings',adminOnly,async(req,res)=>{try{for(const [method,v] of Object.entries(req.body)){if(!['easypaisa','jazzcash','bank'].includes(method))continue;await pool.query('INSERT INTO payment_settings(method,enabled,account_name,account_number,instructions) VALUES(?,?,?,?,?) ON DUPLICATE KEY UPDATE enabled=VALUES(enabled),account_name=VALUES(account_name),account_number=VALUES(account_number),instructions=VALUES(instructions)',[method,!!v.enabled,String(v.account_name||''),String(v.account_number||''),String(v.instructions||'')])}await audit(req.auth.id,'UPDATE_PAYMENT_SETTINGS','payment_settings','all',req.body);res.json({message:'Payment settings saved.'})}catch(e){res.status(500).json({error:e.message})}});
+app.get('/api/admin/transactions',adminOnly,async(req,res)=>{try{const [r]=await pool.query('SELECT t.*,u.username FROM transactions t JOIN users u ON u.id=t.user_id ORDER BY t.id DESC');res.json(r)}catch(e){res.status(500).json({error:e.message})}});
+app.get('/api/admin/referrals',adminOnly,async(req,res)=>{try{const [[a]]=await pool.query('SELECT COUNT(*) total FROM referrals');const [[p]]=await pool.query('SELECT COALESCE(SUM(amount),0) total FROM referral_rewards WHERE status="paid"');const [[q]]=await pool.query('SELECT COALESCE(SUM(amount),0) total FROM referral_rewards WHERE status="pending"');const [[iv]]=await pool.query('SELECT COUNT(*) total FROM referrals WHERE status="invalid"');const [rows]=await pool.query('SELECT u1.username referrer,u2.username referred,r.referral_code,COALESCE(rr.amount,0) reward,COALESCE(rr.status,"pending") status FROM referrals r JOIN users u1 ON u1.id=r.referrer_user_id JOIN users u2 ON u2.id=r.referred_user_id LEFT JOIN referral_rewards rr ON rr.referral_id=r.id ORDER BY r.id DESC');res.json({total:a.total,rewardPaid:p.total,pendingRewards:q.total,invalid:iv.total,rows})}catch(e){res.status(500).json({error:e.message})}});
+app.get('/api/admin/settings',adminOnly,async(req,res)=>{try{res.json({platform_name:await setting('platform_name','SmartInvestment'),support_email:await setting('support_email','support@example.com'),referral_rate:Number(await setting('referral_rate','5')),logs:await (async()=>{const [r]=await pool.query('SELECT a.action,a.created_at,ad.username AS admin FROM audit_logs a JOIN admins ad ON ad.id=a.admin_id ORDER BY a.id DESC LIMIT 12');return r})()})}catch(e){res.status(500).json({error:e.message})}});
+app.put('/api/admin/settings',adminOnly,async(req,res)=>{try{await setSetting('platform_name',req.body.platform_name||'SmartInvestment');await setSetting('support_email',req.body.support_email||'');const rate=Number(req.body.referral_rate);if(!(rate>=0&&rate<=100))return bad(res,'Referral rate must be between 0 and 100.');await setSetting('referral_rate',rate);await audit(req.auth.id,'UPDATE_PLATFORM_SETTINGS','platform_settings','global',{platform_name:req.body.platform_name,support_email:req.body.support_email,referral_rate:rate});res.json({message:'Settings saved.'})}catch(e){res.status(500).json({error:e.message})}});
+
+app.use((err,req,res,next)=>{console.error(err);res.status(500).json({error:err.message||'Server error.'})});
+app.listen(PORT,()=>console.log(`SmartInvestment API running on http://localhost:${PORT}`));
+
+require('dotenv').config({path:require('path').join(__dirname,'../../.env')});
+const bcrypt=require('bcryptjs');const mysql=require('mysql2/promise');
+(async()=>{const db=await mysql.createConnection({host:process.env.DB_HOST||'127.0.0.1',port:Number(process.env.DB_PORT||3306),user:process.env.DB_USER||'root',password:process.env.DB_PASSWORD||'',database:process.env.DB_NAME||'smart_investment'});const adminUser=process.env.ADMIN_USERNAME||'admin';const adminEmail=process.env.ADMIN_EMAIL||'admin@smartinvestment.local';const adminPass=process.env.ADMIN_PASSWORD||'Admin@12345';const hash=await bcrypt.hash(adminPass,12);await db.query('INSERT INTO admins(username,email,password_hash,role) VALUES(?,?,?,"super_admin") ON DUPLICATE KEY UPDATE password_hash=VALUES(password_hash),email=VALUES(email)',[adminUser,adminEmail,hash]);const plans=[['Plan 1',100,1,30],['Plan 2',500,1.2,30],['Plan 3',1000,1.5,45],['Plan 4',2500,1.8,45],['Plan 5',5000,2,60],['Plan 6',10000,2.2,60],['Plan 7',25000,2.5,75],['Plan 8',50000,2.8,90],['Plan 9',100000,3,90],['Plan 10',250000,3.2,120]];for(let i=0;i<plans.length;i++){const [name,amount,rate,days]=plans[i];await db.query('INSERT INTO investment_plans(name,amount,daily_rate,validity_days,status,sort_order) VALUES(?,?,?,?,"active",?) ON DUPLICATE KEY UPDATE name=VALUES(name),amount=VALUES(amount),daily_rate=VALUES(daily_rate),validity_days=VALUES(validity_days),sort_order=VALUES(sort_order)',[name,amount,rate,days,i+1])}for(const [method,name,number,instructions] of [['easypaisa','SmartInvestment','03000000000','Send the exact amount and submit your transaction reference.'],['jazzcash','SmartInvestment','03111111111','Send the exact amount and submit your transaction reference.'],['bank','SmartInvestment','PK00 SMART 0000 0000','Use the bank details provided by support.']])await db.query('INSERT INTO payment_settings(method,enabled,account_name,account_number,instructions) VALUES(?,TRUE,?,?,?) ON DUPLICATE KEY UPDATE account_name=VALUES(account_name),account_number=VALUES(account_number),instructions=VALUES(instructions)',[method,name,number,instructions]);for(const [k,v] of [['platform_name','SmartInvestment'],['support_email','support@smartinvestment.local'],['referral_rate','5']])await db.query('INSERT INTO platform_settings(setting_key,setting_value) VALUES(?,?) ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value)',[k,v]);console.log('Seed complete. Admin:',adminUser,'Password:',adminPass);await db.end()})().catch(e=>{console.error(e);process.exit(1)});
+
+{
+  "name": "smartinvestment-backend",
+  "version": "1.0.0",
+  "private": true,
+  "main": "server.js",
+  "scripts": { "start": "node server.js", "dev": "nodemon server.js", "seed": "node database/seeds/seed.js" },
+  "dependencies": {
+    "bcryptjs": "^3.0.2",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.2",
+    "express": "^5.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "multer": "^2.0.2",
+    "mysql2": "^3.14.3"
+  },
+  "devDependencies": { "nodemon": "^3.1.10" }
+}
+
+PORT=4000
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_USER=root
+DB_PASSWORD=
+DB_NAME=smart_investment
+JWT_SECRET=replace-with-a-long-random-secret
+ADMIN_USERNAME=admin
+ADMIN_EMAIL=admin@smartinvestment.local
+ADMIN_PASSWORD=Admin@12345
+CORS_ORIGIN=http://localhost:5173,http://localhost:5174
+
+
+{
+  "name": "smartinvestment-platform",
+  "version": "1.0.0",
+  "private": true,
+  "description": "SmartInvestment client + admin + secure backend",
+  "scripts": {
+    "install:all": "npm install --prefix backend && npm install --prefix client && npm install --prefix admin",
+    "dev": "concurrently \"npm run dev --prefix backend\" \"npm run dev --prefix client\" \"npm run dev --prefix admin\""
+  },
+  "devDependencies": { "concurrently": "^9.2.1" }
+}
+
+PROFESSIONAL UPGRADE
+===================
+- Reworked mobile-first visual system with purple, blue, green, orange and pink accents.
+- Replaced demo/simulation language in the UI with member/admin operational wording, while keeping published plan rates informational rather than guaranteed.
+- Added responsive dashboard, plans, plan detail, payment evidence, pending state, investments, withdrawal, profile, history and notifications views.
+- Added optional transaction ID and optional screenshot; at least one payment evidence item is required.
+- Added Easypaisa, JazzCash and Pakistani bank withdrawal forms.
+- Added MySQL-backed admin dashboard with customers, payments, withdrawals, investments and plans.
+- Added password security note; plaintext passwords are never displayed.
+- Added referral code tracking with configurable REFERRAL_RATE (default 5%).
+- Added user suspension status and payment screenshot storage.
+
+# VS Code File Map
+
+- `client/` = customer website
+- `admin/` = separate admin application
+- `backend/` = API, authentication, business rules and database access
+- `backend/schema.sql` = relational database schema
+- `backend/database/seeds/seed.js` = admin + 10 plans + default payment settings
+- `.env.example` files = environment templates
+- `docs/` = architecture, setup/reference material
+
+Important entry points:
+
+- Client: `client/src/main.js`
+- Admin: `admin/src/main.js`
+- Backend: `backend/server.js`
+
+# SmartInvestment Architecture
+
+```text
+                 MySQL Database
+                       ▲
+                       │
+                Secure Backend API
+                 Node + Express
+                  ▲           ▲
+                  │           │
+             Customer UI   Admin UI
+              port 5173    port 5174
+```
+
+The two interfaces are separate applications. They are not merged into one page and the admin routes are not exposed as customer pages.
+
+## Data authority
+
+The backend/database is authoritative for:
+
+- balances
+- deposits
+- withdrawals
+- investments
+- transaction history
+- payment settings
+- referral rewards
+- account status
+- admin permissions
+
+The frontend only displays state received from the backend and submits validated requests.
+
+node_modules/
+.env
+*.log
+backend/uploads/payment-proofs/*
+!backend/uploads/payment-proofs/.gitkeep
+dist/
+.DS_Store
+
+# SmartInvestment — Complete Client + Admin + Backend
+
+This project is intentionally split into **three runnable applications**:
+
+1. `client/` — customer-facing SmartInvestment website.
+2. `admin/` — separate SmartInvestment Admin Panel.
+3. `backend/` — secure Node.js + Express API connected to MySQL.
+
+The client and admin never share a page. They communicate only through the backend API and shared database.
+
+## Visual direction
+
+The Admin Panel follows the supplied reference: dark navy/black interface, cyan/teal highlights, compact typography, left sidebar, top navigation, rounded cards, data tables, status badges, charts, quick summary cards and responsive layouts.
+
+## Main admin modules
+
+- Admin Login
+- Dashboard / Overview
+- Users Management
+- Deposit Verification
+- Withdrawal Management
+- Investment Plans (10 plans)
+- Payment Settings
+- Transaction History
+- Referral Management
+- Settings & Security
+- Audit logs
+
+## Main customer modules
+
+- Register / Login
+- Dashboard
+- Investment Plans
+- Deposit
+- My Investments
+- Withdrawal
+- Transactions
+- Referrals
+- Profile / Password change
+
+## Backend security model
+
+- Password hashing with bcryptjs
+- JWT authentication
+- Separate user/admin roles
+- Server-side authorization for admin routes
+- Server-side validation
+- Database transactions for deposits, withdrawals and investments
+- Duplicate transaction protection
+- Audit logs for admin actions
+- Environment variables for secrets
+- Payment screenshots stored outside the frontend
+
+## Database
+
+Run `backend/schema.sql` in MySQL first. It creates:
+
+- admins
+- users
+- investment_plans
+- payment_settings
+- deposits
+- investments
+- withdrawals
+- transactions
+- referrals
+- referral_rewards
+- notifications
+- audit_logs
+- platform_settings
+
+## Local setup
+
+### 1. Requirements
+
+- Node.js 20+
+- MySQL 8+
+- VS Code
+
+### 2. Database
+
+Create/import the database schema:
+
+```sql
+SOURCE backend/schema.sql;
+```
+
+Or open `backend/schema.sql` in MySQL Workbench and execute it.
+
+### 3. Backend environment
+
+Copy:
+
+```text
+backend/.env.example -> backend/.env
+```
+
+Set your MySQL password and a strong `JWT_SECRET`.
+
+### 4. Install dependencies
+
+From the project root:
+
+```bash
+npm install
+npm install --prefix backend
+npm install --prefix client
+npm install --prefix admin
+```
+
+### 5. Seed admin, 10 plans and payment settings
+
+```bash
+npm run seed --prefix backend
+```
+
+Default seed admin is controlled by `.env`:
+
+```text
+Username: admin
+Email: admin@smartinvestment.local
+Password: Admin@12345
+```
+
+Change this before any real deployment.
+
+### 6. Start everything
+
+Option A — separate terminals:
+
+```bash
+npm run dev --prefix backend
+npm run dev --prefix client
+npm run dev --prefix admin
+```
+
+URLs:
+
+- Client: http://localhost:5173
+- Admin: http://localhost:5174
+- API: http://localhost:4000
+
+Option B — root command after installing `concurrently`:
+
+```bash
+npm install
+npm run dev
+```
+
+## Important financial workflow
+
+Deposit:
+
+Customer → Deposit request → Backend → Database → Admin review → Approve/Reject.
+
+On approval, the backend transactionally updates the user's verified balance, deposit status and transaction ledger, then records an audit entry.
+
+Investment:
+
+Customer selects a plan → backend locks/checks balance → creates investment using a snapshot of the plan's rate/duration → deducts balance → creates transaction.
+
+If an admin later changes a plan, existing investments retain the original stored terms.
+
+Withdrawal:
+
+Customer submits request → pending/processing → admin completes or rejects. The backend rechecks balance and deducts funds only when the withdrawal is completed.
+
+Payment settings:
+
+Admin changes EasyPaisa/JazzCash/Bank details → database → backend → client Deposit page. Payment details are not hard-coded in the client.
+
+## Deployment note
+
+This is a complete development foundation. Before production use, configure HTTPS, a strong secret, restricted CORS, secure hosting, database backups, monitoring, proper payment verification procedures, legal/compliance requirements for the jurisdiction, and a production-grade file-storage strategy.
